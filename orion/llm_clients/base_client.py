@@ -22,6 +22,7 @@ class LLMToolCall(BaseModel):
     name: str
     arguments: Dict[str, Any]
     function: Callable
+    id: Optional[str] = None
     model_config = {
         "arbitrary_types_allowed": True
     }
@@ -83,5 +84,12 @@ class BaseLLMClient(ABC):
         :param response_format: A Pydantic model type or an Enum type for structured output.
 
         :return: A PredictResult which can be either a NonStreamingResult or a StreamingPredictResult.
+        """
+        pass
+
+    @abstractmethod
+    def cancel(self):
+        """
+        Request to cancel the current run if possible.
         """
         pass

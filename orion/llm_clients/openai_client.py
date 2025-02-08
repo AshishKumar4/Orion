@@ -22,6 +22,9 @@ from .base_client import (
     LLMTool,
 )
 import json
+import threading
+
+from orion.utils import logger
 
 def _parse_tool_call(tool_call: ParsedFunctionToolCall, toolmap: Dict[str, LLMTool]) -> LLMToolCall:
     """
@@ -31,6 +34,7 @@ def _parse_tool_call(tool_call: ParsedFunctionToolCall, toolmap: Dict[str, LLMTo
     args = json.loads(tool_call.function.arguments)
     return LLMToolCall(
         name=tool_call.function.name,
+        id=tool_call.id,
         arguments=args,
         function=function
     )
@@ -139,6 +143,7 @@ class OpenAIClient(BaseLLMClient):
         self._api_key = api_key
         self._default_model = default_model
         self._client = OpenAI(api_key=self._api_key, base_url=api_url)
+        self.lock = threading.Lock()
 
     def predict(
         self,
@@ -168,11 +173,14 @@ class OpenAIClient(BaseLLMClient):
             "messages": raw_messages,
             "tools": tool_schemas if tool_schemas else None,
         }
+        
+        with self.lock:
+            client = self._client
 
         # If user wants a structured output => parse(...) call
         if response_format is not None:
             # Non-streaming only
-            completion = self._client.beta.chat.completions.parse(
+            completion = client.beta.chat.completions.parse(
                 **common_args,
                 response_format=response_format,
             )
@@ -180,7 +188,7 @@ class OpenAIClient(BaseLLMClient):
         else:
             # Normal
             if stream:
-                response_iter = self._client.chat.completions.create(
+                response_iter = client.chat.completions.create(
                     **common_args,
                     stream=True
                 )
@@ -197,7 +205,7 @@ class OpenAIClient(BaseLLMClient):
                     structured=None
                 )
             else:
-                completion = self._client.chat.completions.create(
+                completion = client.chat.completions.create(
                     **common_args,
                     stream=False
                 )
@@ -230,11 +238,13 @@ class OpenAIClient(BaseLLMClient):
                     for tc in delta.tool_calls:
                         idx = tc.index
                         if idx not in accumulated_tool_calls:
-                            accumulated_tool_calls[idx] = {"name": "", "arguments": ""}
+                            accumulated_tool_calls[idx] = {"name": "", "arguments": "", "id": ""}
                         if tc.function and tc.function.name:
                             accumulated_tool_calls[idx]["name"] = tc.function.name
                         if tc.function and tc.function.arguments:
                             accumulated_tool_calls[idx]["arguments"] += tc.function.arguments
+                        if tc.id:
+                            accumulated_tool_calls[idx]["id"] = tc.id
 
                 finish_reason = choice.finish_reason
                 if finish_reason is not None:
@@ -252,7 +262,8 @@ class OpenAIClient(BaseLLMClient):
                                 LLMToolCall(
                                     name=info["name"],
                                     arguments=parsed_args,
-                                    function=toolmap.get(info["name"])
+                                    function=toolmap.get(info["name"]),
+                                    id=info["id"]
                                 )
                             )
                     yield {"text": text_chunk, "tool_calls": final_tool_calls}
@@ -260,3 +271,13 @@ class OpenAIClient(BaseLLMClient):
                 else:
                     # intermediate chunk => yield text only
                     yield {"text": text_chunk}
+                    
+    def cancel(self):
+        """
+        Cancels the current request.
+        """
+        with self.lock:
+            logger.debug("Cancelling OpenAI request.")
+            self._client.close()
+            self._client = OpenAI(api_key=self._api_key, base_url=self._client.base_url)
+            logger.debug("OpenAI client reset.")

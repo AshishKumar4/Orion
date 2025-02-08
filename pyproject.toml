@@ -1,0 +1,28 @@
+[project]
+name = "orion"
+version = "0.1.0"
+description = "A powerful multi-agent orchestration framework for LLMs"
+readme = "README.md"
+license = "MIT"
+authors = [
+  { name = "Ashish Kumar Singh", email = "ashishkmr472@gmail.com" },
+]
+keywords = ["llm", "multi-agent", "framework", "openai", "gemini"]
+classifiers = [
+  "Programming Language :: Python :: 3.9",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent"
+]
+dependencies = [
+  "pydantic>=1.10,<2.999",       # or >=2 if you prefer Pydantic v2
+  "openai>=0.28.0",              # If you want to rely on the official openai library
+  "google-generativeai>=0.7.2"   # Gemini's Python SDK
+]
+requires-python = ">=3.9"
+
+[project.urls]
+"Homepage" = "https://github.com/ashishkumar/orion"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"

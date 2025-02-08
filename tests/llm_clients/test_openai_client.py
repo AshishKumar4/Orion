@@ -108,7 +108,7 @@ def test_predict_non_streaming_no_tools(mocker, openai_client, messages):
     mock_create.assert_called_once_with(
         model="gpt-4",
         messages=[{"role": "user", "content": "Hello, world!"}],
-        functions=[],
+        tools=None,
         stream=False
     )
     assert result.text == "Hello user!"
@@ -169,7 +169,7 @@ def test_predict_non_streaming_with_tools(mocker, openai_client, messages):
     assert mock_create.called
     call_args = mock_create.call_args[1]
     assert call_args["model"] == "gpt-3.5-turbo"
-    assert len(call_args["functions"]) == 2  # two tools -> two schemas
+    assert len(call_args["tools"]) == 2  # two tools -> two schemas
 
     # Validate the result
     assert result.text == "Sure, calling the tool now..."
@@ -235,7 +235,7 @@ def test_predict_non_streaming_structured_parse(mocker, openai_client, messages)
     parse_mock.assert_called_once_with(
         model="gpt-4",
         messages=[{"role": "user", "content": "Hello, world!"}],
-        functions=[
+        tools=[
             {
                 "type": "function",
                 "function": {
@@ -246,8 +246,10 @@ def test_predict_non_streaming_structured_parse(mocker, openai_client, messages)
                         "properties": {
                             "param": {"type": "string"}
                         },
-                        "required": ["param"]
-                    }
+                        "additionalProperties": False,
+                        "required": ["param"],
+                    },
+                    "strict": True,
                 }
             }
         ],
@@ -426,15 +428,10 @@ def test_predict_streaming_with_tool_calls(mocker, openai_client, messages):
     # chunk2 => partial data => not finished => []
     # chunk3 => partial arguments => still not finished => []
     # chunk4 => finish_reason => finalize => single tool call
-    assert len(tool_calls_per_chunk) == 4
-    assert tool_calls_per_chunk[0] == []
-    assert tool_calls_per_chunk[1] == []
-    assert tool_calls_per_chunk[2] == []
-
-    final_calls = tool_calls_per_chunk[3]
+    final_calls = tool_calls_per_chunk[0]
     assert len(final_calls) == 1
     fc = final_calls[0]
     assert fc.name == "mock_tool_two"
-    assert fc.arguments == {"arguments": '{"x":1, "y":2}'}
+    assert fc.arguments == {"x":1, "y":2}
     # The function attribute should be the actual callable
     assert fc.function == mock_tool_two

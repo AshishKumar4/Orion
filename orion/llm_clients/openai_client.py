@@ -61,18 +61,20 @@ def _handle_normal_completion(completion: ChatCompletion, toolmap: Dict[str, LLM
     if message.tool_calls:
         for tc in message.tool_calls:
             invoked_tools.append(_parse_tool_call(tc, toolmap))
-    # print(f'text: {text}, invoked_tools: {invoked_tools}')
     return NonStreamingResult(text=text, tool_calls=invoked_tools, structured=None)
-
 
 def _function_to_schema(func: Callable) -> Dict[str, Any]:
     """
-    Auto-generate a JSON schema from a Python function using docstring and type hints.
+    Auto-generate a JSON schema from a Python function using docstring & type hints,
+    ALWAYS using strict mode:
+      - "strict": true
+      - "additionalProperties": false
     """
     sig = inspect.signature(func)
     doc = (func.__doc__ or "").strip()
     from typing import get_type_hints
     type_hints = get_type_hints(func)
+
     properties = {}
     required = []
     for param_name, param in sig.parameters.items():
@@ -84,23 +86,36 @@ def _function_to_schema(func: Callable) -> Dict[str, Any]:
         properties[param_name] = {"type": schema_type}
         if is_required:
             required.append(param_name)
-    params_schema = {"type": "object", "properties": properties}
+
+    # Force additionalProperties = false for strict mode
+    params_schema = {
+        "type": "object",
+        "properties": properties,
+        "additionalProperties": False
+    }
     if required:
         params_schema["required"] = required
+
+    # Return a function schema that has "strict": True
     return {
         "type": "function",
         "function": {
             "name": func.__name__,
             "description": doc,
-            "parameters": params_schema
+            "parameters": params_schema,
+            "strict": True  # strictly enforce valid JSON
         }
     }
 
-
-def _map_python_to_json_type(py_type: Any) -> str:
+def _map_python_to_json_type(py_type: Any) -> Union[str, List[str]]:
     """
-    Minimal mapping from Python type to JSON schema type.
+    Minimal mapping from Python type -> JSON schema type.
+    For example, if you want to allow null for optional fields, you could do
+    ["string", "null"] or something similar. But for now we do a simple approach:
     """
+    # If you want to allow optional fields, you must define
+    # param: Optional[str] or param: str|None, etc. in your code,
+    # then interpret that here. For brevity, we'll do a naive approach.
     if py_type == int:
         return "integer"
     elif py_type == float:
@@ -110,7 +125,6 @@ def _map_python_to_json_type(py_type: Any) -> str:
     elif py_type == str:
         return "string"
     return "string"
-
 
 class OpenAIClient(BaseLLMClient):
     """
@@ -136,45 +150,47 @@ class OpenAIClient(BaseLLMClient):
             Type[enum.Enum]]] = None,
     ) -> PredictResult:
         use_model = model or self._default_model
-        raw_messages = [{"role": m.role, "content": m.content}
-            for m in messages]
+        raw_messages = [{"role": m.role, "content": m.content} for m in messages]
 
-        # Convert python callables to JSON schemas.
+        # Convert python callables to JSON schemas (strict).
         tool_schemas = []
         toolmap = {}
         if tools:
             for tool in tools:
                 schema = _function_to_schema(tool)
-                # print(f'schema: {schema}')
                 tool_schemas.append(schema)
                 toolmap[schema["function"]["name"]] = tool
 
+        # The OpenAI library has 'tools' or 'functions' param (depending on your snippet).
+        # We'll pass them as 'tools' if not empty.
         common_args = {
             "model": use_model,
             "messages": raw_messages,
-            "tools": tool_schemas if len(tool_schemas) > 0 else None,
+            "tools": tool_schemas if tool_schemas else None,
         }
 
+        # If user wants a structured output => parse(...) call
         if response_format is not None:
-            # Use beta.parse for structured output (non-streaming)
+            # Non-streaming only
             completion = self._client.beta.chat.completions.parse(
                 **common_args,
                 response_format=response_format,
             )
             return _handle_parsed_completion(completion, toolmap)
         else:
+            # Normal
             if stream:
                 response_iter = self._client.chat.completions.create(
                     **common_args,
                     stream=True
                 )
-                # Create a generator that processes each chunk.
                 chunk_gen = self._stream_chunks(response_iter, toolmap)
-                # Use itertools.tee to split the generator into two iterators:
+                # We "tee" the generator so we can produce separate text & tool_calls iterators
                 iter1, iter2 = itertools.tee(chunk_gen, 2)
-                # Map each chunk to extract text and tool_calls separately.
-                text_iter = (chunk["text"] for chunk in iter1)
-                tool_calls_iter = (chunk["tool_calls"] for chunk in iter2 if "tool_calls" in chunk)
+                text_iter = (c["text"] for c in iter1)
+                # If there's "tool_calls" in the chunk, yield them, else empty list
+                tool_calls_iter = (c["tool_calls"] for c in iter2 if "tool_calls" in c)
+
                 return StreamingResult(
                     text=text_iter,
                     tool_calls=tool_calls_iter,
@@ -188,24 +204,28 @@ class OpenAIClient(BaseLLMClient):
                 return _handle_normal_completion(completion, toolmap)
 
     def _stream_chunks(
-        self, response_iter: Stream[ChatCompletionChunk], toolmap: Dict[str, LLMTool]
+        self,
+        response_iter: Stream[ChatCompletionChunk],
+        toolmap: Dict[str, LLMTool]
     ) -> Iterator[Dict[str, Any]]:
         """
         Processes streaming chunks from OpenAI's response.
-        Yields a dictionary with keys:
-          - "text": a text chunk (possibly empty)
-          - "tool_calls": a list of LLMToolCall objects ONLY when the tool call is complete,
-            otherwise an empty list.
+        Strict mode is enforced in the function schemas,
+        so the model must produce valid arguments that match the schema.
+        
+        Yields a dict:
+          {
+            "text": str,
+            "tool_calls": list[LLMToolCall] (only on final chunk if there's a finish_reason)
+          }
         """
-        accumulated_tool_calls: Dict[int, Dict[str, str]] = {}  # index -> {"name": str, "arguments": str}
+        accumulated_tool_calls: Dict[int, Dict[str, str]] = {}
         
         for chunk in response_iter:
             for choice in chunk.choices:
                 delta = choice.delta
-                # Extract text content (if any)
-                text_chunk = delta.content if delta.content is not None else ""
-                
-                # Process tool_calls if present (for APIs that support multiple calls per chunk)
+                text_chunk = delta.content or ""
+                # If we see tool_calls in the chunk
                 if delta.tool_calls:
                     for tc in delta.tool_calls:
                         idx = tc.index
@@ -216,24 +236,27 @@ class OpenAIClient(BaseLLMClient):
                         if tc.function and tc.function.arguments:
                             accumulated_tool_calls[idx]["arguments"] += tc.function.arguments
 
-                # Check if the chunk has a finish_reason (indicating the tool call is complete)
                 finish_reason = choice.finish_reason
                 if finish_reason is not None:
-                    # Finalize tool calls: convert accumulated data to LLMToolCall objects.
-                    complete_tool_calls = []
+                    # We finalize the tool calls
+                    final_tool_calls = []
                     for idx, info in accumulated_tool_calls.items():
                         if info["name"]:
-                            complete_tool_calls.append(
+                            # parse the JSON from info["arguments"]
+                            try:
+                                parsed_args = json.loads(info["arguments"])
+                            except json.JSONDecodeError:
+                                # If the model gave malformed JSON, it fails in strict mode anyway
+                                parsed_args = {}
+                            final_tool_calls.append(
                                 LLMToolCall(
                                     name=info["name"],
-                                    arguments=json.loads(info["arguments"]),
+                                    arguments=parsed_args,
                                     function=toolmap.get(info["name"])
                                 )
                             )
-                    # Yield this chunk with its text and the complete tool calls.
-                    yield {"text": text_chunk, "tool_calls": complete_tool_calls}
-                    # Clear the accumulator for future tool calls.
+                    yield {"text": text_chunk, "tool_calls": final_tool_calls}
                     accumulated_tool_calls.clear()
                 else:
-                    # Not final—yield the text and an empty list (tool call not yet complete)
+                    # intermediate chunk => yield text only
                     yield {"text": text_chunk}

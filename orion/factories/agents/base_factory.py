@@ -8,7 +8,7 @@ class AgentFactory(ABC):
     """
 
     @abstractmethod
-    def create_agent(
+    def create(
         self,
         task_description: str,
         **kwargs

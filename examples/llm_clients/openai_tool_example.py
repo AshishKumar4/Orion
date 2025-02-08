@@ -25,8 +25,7 @@ def add_numbers(x: int, y: int) -> int:
 
 def main():
     client = OpenAIClient(
-        api_key=config.OPENAI_API_KEY,
-        default_model="gpt-4o"
+        model_name="gpt-4o"
     )
 
     # Prompt that encourages the LLM to use one of the tools
@@ -39,7 +38,6 @@ def main():
 
     # Non-streaming predict with tools
     result = client.predict(
-        model="gpt-4o",
         messages=messages,
         tools=tools,
         stream=False,

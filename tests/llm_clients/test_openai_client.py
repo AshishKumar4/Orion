@@ -51,7 +51,7 @@ def messages():
 @pytest.fixture
 def openai_client():
     # Create an OpenAIClient instance with dummy creds
-    return OpenAIClient(api_key="test-key")
+    return OpenAIClient()
 
 
 ######################################
@@ -64,7 +64,7 @@ def test_openai_client_init_no_openai(monkeypatch):
     with monkeypatch.context() as m:
         m.setattr("orion.llm_clients.openai_client.OpenAI", None)  # Force no OpenAI
         with pytest.raises(ImportError):
-            OpenAIClient(api_key="does_not_matter")
+            OpenAIClient()
 
 
 ######################################

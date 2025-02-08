@@ -18,8 +18,7 @@ class MovieReview(BaseModel):
 
 def main():
     client = OpenAIClient(
-        api_key=config.OPENAI_API_KEY,
-        default_model="gpt-4"
+        model_name="gpt-4o"
     )
 
     messages = [
@@ -36,7 +35,6 @@ def main():
 
     # We'll parse the LLM's response into the MovieReview Pydantic model
     result = client.predict(
-        model="gpt-4o",
         messages=messages,
         tools=None,
         stream=False,
@@ -47,7 +45,7 @@ def main():
     print("Text:", result.text)  # Possibly a summary or explanation
     print("Tool Calls:", result.tool_calls)
     if result.structured:
-        print("Parsed MovieReview:", result.structured.dict())
+        print("Parsed MovieReview:", result.structured.dict(), MovieReview(**result.structured.dict()))
     else:
         print("No structured data returned...")
 

@@ -9,6 +9,7 @@ try:
     from openai import OpenAI  # As per your snippet usage
     from openai.types.chat import ChatCompletion, ParsedChatCompletion, ChatCompletionChunk, ParsedFunctionToolCall
     from openai import Stream
+    from openai import NOT_GIVEN
 except ImportError:
     OpenAI = None
 
@@ -25,6 +26,8 @@ import json
 import threading
 
 from orion.utils import logger
+
+from .supported_models import DEFAULT_SUPPORTED_MODELS
 
 def _parse_tool_call(tool_call: ParsedFunctionToolCall, toolmap: Dict[str, LLMTool]) -> LLMToolCall:
     """
@@ -137,30 +140,32 @@ class OpenAIClient(BaseLLMClient):
     and structured output (via response_format).
     """
 
-    def __init__(self, api_key: str, api_url: str = None, default_model: str = "gpt-4"):
+    def __init__(self, model_name: str = 'gpt-4o'):
         if not OpenAI:
             raise ImportError("OpenAI library not found.")
-        self._api_key = api_key
-        self._default_model = default_model
-        self._client = OpenAI(api_key=self._api_key, base_url=api_url)
+        self.model_name = model_name
+        info = DEFAULT_SUPPORTED_MODELS.get(model_name)
+        if not info:
+            raise ValueError(f"Model {model_name} not found in supported models.")
+        self._api_key = info.api_key
+        self._api_url = info.api_url
+        self._client = OpenAI(api_key=self._api_key, base_url=self._api_url)
         self.lock = threading.Lock()
 
     def predict(
         self,
-        model: str,
         messages: List[LLMMessage],
         tools: Optional[List[LLMTool]] = None,
         stream: bool = False,
         response_format: Optional[Union[Type[BaseModel],
             Type[enum.Enum]]] = None,
     ) -> PredictResult:
-        use_model = model or self._default_model
         raw_messages = [{"role": m.role, "content": m.content} for m in messages]
 
         # Convert python callables to JSON schemas (strict).
         tool_schemas = []
         toolmap = {}
-        if tools:
+        if tools is not None:
             for tool in tools:
                 schema = _function_to_schema(tool)
                 tool_schemas.append(schema)
@@ -169,9 +174,9 @@ class OpenAIClient(BaseLLMClient):
         # The OpenAI library has 'tools' or 'functions' param (depending on your snippet).
         # We'll pass them as 'tools' if not empty.
         common_args = {
-            "model": use_model,
+            "model": self.model_name,
             "messages": raw_messages,
-            "tools": tool_schemas if tool_schemas else None,
+            "tools": tool_schemas if tool_schemas else NOT_GIVEN,
         }
         
         with self.lock:
@@ -279,5 +284,5 @@ class OpenAIClient(BaseLLMClient):
         with self.lock:
             logger.debug("Cancelling OpenAI request.")
             self._client.close()
-            self._client = OpenAI(api_key=self._api_key, base_url=self._client.base_url)
+            self._client = OpenAI(api_key=self._api_key, base_url=self._api_url)
             logger.debug("OpenAI client reset.")

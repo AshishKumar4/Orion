@@ -29,8 +29,7 @@ def short_story(story: str) -> str:
 
 def main():
     client = OpenAIClient(
-        api_key=config.OPENAI_API_KEY,
-        default_model="gpt-4o"
+        model_name="gpt-4o"
     )
 
     messages = [
@@ -42,7 +41,6 @@ def main():
 
     # Stream the partial outputs
     result = client.predict(
-        model="gpt-4o",
         messages=messages,
         tools=tools,
         stream=True,

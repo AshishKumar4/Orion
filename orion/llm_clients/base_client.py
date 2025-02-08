@@ -63,13 +63,14 @@ class BaseLLMClient(ABC):
     
     def __init__(
         self, 
+        model: str,
     ):
         super().__init__()
+        self.model = model
 
     @abstractmethod
     def predict(
         self,
-        model: str,
         messages: List[LLMMessage],
         tools: Optional[List[LLMTool]] = None,
         stream: bool = False,

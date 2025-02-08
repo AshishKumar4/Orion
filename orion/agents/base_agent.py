@@ -45,18 +45,12 @@ class BaseAgent(ABC):
         name: str,
         role: str,
         description: str,
-        model_name: str,
-        api_key: str,
-        api_url: Optional[str] = None,
         tools: Optional[List[Callable]] = None,
         executor: Optional[Executor] = None,
     ):
         self.name = name
         self.role = role
         self.description = description
-        self.model_name = model_name
-        self.api_key = api_key
-        self.api_url = api_url
         self.tools = tools or []
 
         # Concurrency

@@ -34,7 +34,6 @@ def main():
         role="Assistant",
         description="You are a helpful agent that can greet users, multiply numbers, and wait as needed.",
         model_name="gpt-4o",  # or "gemini"
-        api_key=config.OPENAI_API_KEY,
         tools=[greet_user, multiply_numbers, random_wait],  # multiple tools
     )
 

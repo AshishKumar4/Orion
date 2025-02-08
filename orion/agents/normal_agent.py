@@ -34,9 +34,7 @@ class NormalAgent(BaseAgent):
         name: str,
         role: str,
         description: str,
-        model_name: str = "gpt-4o",
-        api_key: str = None,
-        api_url: str = None,
+        model_name: str,
         tools=None,
         executor=None
     ):
@@ -44,24 +42,13 @@ class NormalAgent(BaseAgent):
             name=name,
             role=role,
             description=description,
-            model_name=model_name,
-            api_key=api_key or config.OPENAI_API_KEY,
-            api_url=api_url,
             tools=tools,
             executor=executor
         )
 
-        # If "gemini" is in the model_name, override the api_url if none provided
-        if "gemini" in self.model_name.lower() and not self.api_url:
-            self.api_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
-            self.api_key = api_key or config.GEMINI_API_KEY
-
-        # Create the LLM client
-        self.llm_client = OpenAIClient(
-            api_key=self.api_key,
-            api_url=self.api_url,
-            default_model=self.model_name,
-        )
+        self.llm_client = OpenAIClient(model_name)
+        
+        self.model_name = model_name
         
     def cancel(self):
         self.llm_client.cancel()
@@ -100,7 +87,6 @@ class NormalAgent(BaseAgent):
         # 4. Call the LLM in streaming mode
         llm_tools = self.tools if force_tools else None
         llm_result = self.llm_client.predict(
-            model=self.model_name,
             messages=llm_messages,
             tools=llm_tools,
             stream=True,  # always streaming

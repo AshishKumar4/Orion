@@ -8,7 +8,7 @@ from orion.llm_clients.base_client import LLMMessage
 
 def main():
     # Initialize the OpenAIClient with your API key from config
-    client = OpenAIClient("gpt-4")
+    client = OpenAIClient("gemini-2.0-flash")
 
     messages = [
         LLMMessage(role="user", content="Hello, how are you today?")

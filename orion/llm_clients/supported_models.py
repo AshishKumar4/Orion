@@ -23,7 +23,14 @@ DEFAULT_SUPPORTED_MODELS_LIST = [
     ),
     ModelInfo(
         "gemini-2.0-flash",
-        "Faster, better and more accurate than gpt-4o, and may be cheaper as well, but google model and less tested",
+        "Faster, better and more accurate than gpt-4o, and 10x cheaper. Offers a very high level of intelligence and strong performance, with a lower cost per token.",
+        "Google",
+        api_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        api_key=config.GEMINI_API_KEY,
+    ),
+    ModelInfo(
+        "gemini-1.5-flash",
+        "Faster but less accurate than gemini-2.0-flash. Offers a good level of intelligence and performance, with a lower cost per token.",
         "Google",
         api_url="https://generativelanguage.googleapis.com/v1beta/openai/",
         api_key=config.GEMINI_API_KEY,

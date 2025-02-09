@@ -26,7 +26,7 @@ import json
 import threading
 
 from orion.utils import logger
-
+from orion.config import config
 from .supported_models import DEFAULT_SUPPORTED_MODELS
 
 def _parse_tool_call(tool_call: ParsedFunctionToolCall, toolmap: Dict[str, LLMTool]) -> LLMToolCall:
@@ -146,9 +146,14 @@ class OpenAIClient(BaseLLMClient):
         self.model_name = model_name
         info = DEFAULT_SUPPORTED_MODELS.get(model_name)
         if not info:
-            raise ValueError(f"Model {model_name} not found in supported models.")
-        self._api_key = info.api_key
-        self._api_url = info.api_url
+            logger.warning(f"Model {model_name} not found in supported models. Using default API key.")
+            api_key = config.OPENAI_API_KEY if 'gpt' in model_name else config.GEMINI_API_KEY
+            api_url = None if 'gpt' in model_name else "https://generativelanguage.googleapis.com/v1beta/openai/"
+        else:
+            api_key = info.api_key
+            api_url = info.api_url
+        self._api_key = api_key
+        self._api_url = api_url
         self._client = OpenAI(api_key=self._api_key, base_url=self._api_url)
         self.lock = threading.Lock()
 

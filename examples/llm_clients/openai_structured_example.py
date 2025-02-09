@@ -18,7 +18,8 @@ class MovieReview(BaseModel):
 
 def main():
     client = OpenAIClient(
-        model_name="gpt-4o"
+        # model_name="gpt-4o"
+        model_name="gemini-2.0-flash"
     )
 
     messages = [

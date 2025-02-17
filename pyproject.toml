@@ -3,7 +3,7 @@ name = "orion"
 version = "0.1.0"
 description = "A powerful multi-agent orchestration framework for LLMs"
 readme = "README.md"
-license = "MIT"
+license = { text = "MIT" }
 authors = [
   { name = "Ashish Kumar Singh", email = "ashishkmr472@gmail.com" },
 ]

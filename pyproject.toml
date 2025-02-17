@@ -1,5 +1,5 @@
 [project]
-name = "orion-framework"
+name = "orion-core"
 version = "0.1.0"
 description = "A powerful multi-agent orchestration framework for LLMs"
 readme = "README.md"

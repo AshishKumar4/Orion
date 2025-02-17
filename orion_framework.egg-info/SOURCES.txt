@@ -2,11 +2,6 @@ LICENSE
 README.md
 pyproject.toml
 orion/__init__.py
-orion.egg-info/PKG-INFO
-orion.egg-info/SOURCES.txt
-orion.egg-info/dependency_links.txt
-orion.egg-info/requires.txt
-orion.egg-info/top_level.txt
 orion/agents/__init__.py
 orion/agents/base_agent.py
 orion/agents/normal_agent.py
@@ -25,3 +20,8 @@ orion/llm_clients/supported_models.py
 orion/utils/__init__.py
 orion/utils/concurrency.py
 orion/utils/logger.py
+orion_framework.egg-info/PKG-INFO
+orion_framework.egg-info/SOURCES.txt
+orion_framework.egg-info/dependency_links.txt
+orion_framework.egg-info/requires.txt
+orion_framework.egg-info/top_level.txt
